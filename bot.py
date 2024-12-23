@@ -6,10 +6,9 @@ import os
 from flask import Flask, render_template
 from SQLTable import SQLTable  # Import your SQLTable class
 
-# Telegram Bot Token
 bot = telebot.TeleBot("1414785692:AAGvzQOKhil6X9uzlMzRC_VP94jvjB9C16E")
 
-# Directories and Files
+
 HOMEDIR = 'data\\'
 HELLO_FILE = HOMEDIR + 'hello.txt'
 FACTS_FILE = HOMEDIR + 'facts.txt'
@@ -17,7 +16,7 @@ CITIES_FILE = HOMEDIR + 'city.txt'
 LOG_DIR = HOMEDIR + 'logs/'
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# Database Configuration
+
 DB_CONFIG = {
     'user': 'j1007852',
     'password': 'el|N#2}-F8',
@@ -25,29 +24,25 @@ DB_CONFIG = {
     'database': 'j1007852_petrova_andreev'
 }
 
-# Tables
 USERS_TABLE = "users"
 MESSAGES_TABLE = "messages"
 GAMES_TABLE = "games"
 
-# SQLTable Instances
 users_table = SQLTable(db_config=DB_CONFIG, table_name=USERS_TABLE)
 messages_table = SQLTable(DB_CONFIG, MESSAGES_TABLE)
 games_table = SQLTable(DB_CONFIG, GAMES_TABLE)
 
-# Глобальная переменная для игры в города
 used_cities = set()
 
-# Загрузка городов из файла
 def load_cities():
     try:
         with open(CITIES_FILE, 'r', encoding='utf-8') as file:
             cities = set(line.strip().lower() for line in file.readlines())
         return cities
     except FileNotFoundError:
-        return set()  # Если файл не найден, возвращаем пустой набор
+        return set()  
 
-# Чтение городов из файла
+
 cities = load_cities()
 
 
@@ -60,14 +55,13 @@ def start_message(message):
     bot.reply_to(message, greeting)
     log_message(message.chat.id, f"Bot: {greeting}")
 
-    # Стартуем отправку фактов в отдельном потоке
     threading.Thread(target=send_facts, args=(message.chat.id,)).start()
 
 @bot.message_handler(commands=['fact'])
 def fact_message(message):
     fact = get_random_line(FACTS_FILE)
-    bot.reply_to(message, f'Факт: {fact}')
-    log_message(message.chat.id, f"Bot: Факт: {fact}")
+    bot.reply_to(message, f'Прогноз: {fact}')
+    log_message(message.chat.id, f"Bot: Прогноз: {fact}")
 
 @bot.message_handler(commands=['report'])
 def report_message(message):
@@ -82,12 +76,11 @@ def city_start(message):
     bot.reply_to(message, "Давайте играть в города! Назовите первый город или напишите 'стоп' для выхода.")
     log_message(message.chat.id, "Bot: Давайте играть в города! Назовите первый город или напишите 'стоп' для выхода.")
 
-    # Запись новой игры
     try:
         games_table.insert_row({
             'user_id': message.chat.id,
             'start_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'end_time': None  # Игра еще не закончена
+            'end_time': None  
         })
     except Exception as e:
         print(f"Ошибка записи игры в таблицу: {e}")
@@ -106,7 +99,7 @@ def help_message(message):
     bot.reply_to(message, help_text)
     log_message(message.chat.id, "Bot: Отправка списка команд")
 
-# Функция для генерации отчета пользователя
+
 def fetch_user_report(user_id):
     try:
         user = users_table.fetch_one("user_id", user_id)
@@ -119,14 +112,14 @@ def fetch_user_report(user_id):
         report = f"Отчет для пользователя: {user['username']}\n"
         report += f"Последняя активность: {user['last_active']}\n\n"
 
-        # Получаем последние 10 сообщений
+
         messages = messages_table.fetch_all_ordered("timestamp", ascending=False)
         user_messages = messages[messages['user_id'] == user_id].head(10)
         report += "Последние сообщения:\n"
         for msg in user_messages.to_dict(orient="records"):
             report += f"[{msg['timestamp']}] {msg['message_text']}\n"
 
-        # Получаем последние 5 игр
+
         games = games_table.fetch_all_ordered("start_time", ascending=False)
         user_games = games[games['user_id'] == user_id].head(5)
         report += "\nПоследние игры:\n"
@@ -138,7 +131,7 @@ def fetch_user_report(user_id):
     except Exception as e:
         return f"Ошибка базы данных: {e}"
 
-# Функция для получения случайной строки из файла
+
 def get_random_line(filename):
     try:
         with open(filename, 'r', encoding='utf-8') as file:
@@ -147,13 +140,12 @@ def get_random_line(filename):
     except FileNotFoundError:
         return "Файл не найден."
 
-# Логирование сообщений
 def log_message(user_id, message):
     log_file = os.path.join(LOG_DIR, f'{user_id}.log')
     with open(log_file, 'a', encoding='utf-8') as file:
         file.write(f'{time.strftime("%Y-%m-%d %H:%M:%S")} - {message}\n')
 
-    # Запись в таблицу messages
+
     try:
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         messages_table.insert_row({
@@ -165,15 +157,14 @@ def log_message(user_id, message):
         print(f"Ошибка записи сообщения в таблицу: {e}")
 
 
-# Функция для отправки случайных фактов
+
 def send_facts(chat_id):
     while True:
         fact = get_random_line(FACTS_FILE)
-        bot.send_message(chat_id, f'Факт: {fact}')
-        log_message(chat_id, f"Bot: Факт: {fact}")
-        time.sleep(360)
+        bot.send_message(chat_id, f'Астрологический прогноз на сегодня: {fact}')
+        log_message(chat_id, f"Bot: Прогноз: {fact}")
+        time.sleep(3600)
 
-# Обработка игры в города
 @bot.message_handler(func=lambda message: True)
 def handle_city_game(message):
     global used_cities, cities
@@ -212,7 +203,6 @@ def handle_city_game(message):
         used_cities.clear()
         log_message(message.chat.id, "Bot: Вы победили! У меня закончились города.")
 
-# Запуск Flask приложения и бота в отдельных потоках
 if __name__ == '__main__':
     bot.infinity_polling()
 
